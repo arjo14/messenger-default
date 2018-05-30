@@ -18,6 +18,8 @@ import com.github.messenger4j.send.MessagePayload;
 import com.github.messenger4j.send.MessagingType;
 import com.github.messenger4j.send.message.TemplateMessage;
 import com.github.messenger4j.send.message.TextMessage;
+import com.github.messenger4j.send.message.quickreply.QuickReply;
+import com.github.messenger4j.send.message.quickreply.TextQuickReply;
 import com.github.messenger4j.send.message.template.ButtonTemplate;
 import com.github.messenger4j.send.message.template.button.Button;
 import com.github.messenger4j.send.message.template.button.UrlButton;
@@ -27,16 +29,15 @@ import com.github.messenger4j.webhook.event.TextMessageEvent;
 import com.github.messenger4j.webhook.event.attachment.Attachment;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
@@ -50,7 +51,7 @@ public class MessengerBot {
     @Value("${messenger4j.pageAccessToken}")
     private String pageAccessToken;
 
-    private Map<Long, Stack<Integer>> stateMap = new ConcurrentHashMap<>();
+    private Map<String, Stack<Integer>> stateMap = new ConcurrentHashMap<>();
 
 
     public MessengerBot(@Value("${messenger4j.appSecret}") final String appSecret,
@@ -105,12 +106,15 @@ public class MessengerBot {
                             TextMessageEvent textEvent = event.asTextMessageEvent();
                             try {
                                 newTextMessageEventHandler(textEvent);
-                            } catch (MalformedURLException | MessengerIOException | MessengerApiException e) {
+                            } catch (MessengerIOException | MessengerApiException e) {
                                 e.printStackTrace();
                             }
                         } else if (event.isQuickReplyMessageEvent()) {
-                            QuickReplyMessageEvent quickReplyMessageEvent = event.asQuickReplyMessageEvent();
-                            newQuickReplyMessageEventHandler(quickReplyMessageEvent.messageId(), quickReplyMessageEvent.senderId(), quickReplyMessageEvent.text(), quickReplyMessageEvent.timestamp());
+                            try {
+                                newQuickReplyMessageEventHandler(event.asQuickReplyMessageEvent());
+                            } catch (MessengerApiException | MessengerIOException e) {
+                                e.printStackTrace();
+                            }
                         } else if (event.isPostbackEvent()) {
                             newPostbackEventHandler();
                         } else if (event.isMessageEchoEvent()) {
@@ -143,15 +147,92 @@ public class MessengerBot {
     }
 
 
-    private void newTextMessageEventHandler(TextMessageEvent event) throws MalformedURLException, MessengerApiException, MessengerIOException {
+    private void newTextMessageEventHandler(TextMessageEvent event) throws MessengerApiException, MessengerIOException {
         log.info("Received new Text message");
-        //sendTextMessage(senderId, "svbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafh");
-        sendTextMessage(event.senderId(), event.text());
+        if (event.text().equals("start")) {
+            Stack<Integer> stack = stateMap.computeIfAbsent(event.senderId(), k -> new Stack<>());
+
+            stack.push(0);
+
+            createMsg(event.senderId());
+        }
+    }
+
+    private void createMsg(String chatId) throws MessengerApiException, MessengerIOException {
+        List<String> list = createButtons(0);
+        sendQuickRepliesToUser(chatId, list, false);
+    }
+
+    private void sendQuickRepliesToUser(String userId, List<String> list, boolean hasExtraButtons) throws MessengerApiException, MessengerIOException {
+
+        if (hasExtraButtons) {
+            list.add("Back");
+            list.add("End");
+        }
+
+        List<QuickReply> quickReplies = list.stream()
+                .map(text -> TextQuickReply.create(text, text))
+                .collect(Collectors.toList());
+
+        final TextMessage message = TextMessage.create("Random text", of(quickReplies), empty());
+        final MessagePayload payload = MessagePayload.create(userId, MessagingType.RESPONSE, message);
+
+        messenger.send(payload);
+
+    }
+
+    private List<String> createButtons(int startNumber) {
+        List<String> list = new ArrayList<>();
+        for (int i = startNumber + 1, endNumber = startNumber + 6; i < endNumber; i++) {
+            list.add(String.valueOf(i));
+        }
+        return list;
     }
 
 
-    private void newQuickReplyMessageEventHandler(String messageId, String senderId, String messageText, Instant timestamp) {
+    private void newQuickReplyMessageEventHandler(QuickReplyMessageEvent event) throws MessengerApiException, MessengerIOException {
         log.info("Received new QuickReply message");
+        String userId = event.senderId();
+        String text = event.text();
+
+        Stack<Integer> stack;
+        int number;
+        switch (event.text().toLowerCase()) {
+            case "back":
+
+                stack = stateMap.get(userId);
+                if (!stack.empty()) {
+                    stack.pop();
+                }
+                if (!stack.empty() && stack.size() > 1) {
+                    number = stack.peek();
+                    sendQuickRepliesToUser(userId, createButtons(number), true);
+                } else {
+                    number = 0;
+                    sendQuickRepliesToUser(userId, createButtons(number), false);
+                }
+
+                break;
+            case "end":
+                stack = stateMap.get(userId);
+                StringBuilder stringBuilder = new StringBuilder();
+                stack.forEach(integer -> stringBuilder.append(integer).append(","));
+                sendTextMessage(userId, stringBuilder.substring(0, stringBuilder.length() - 1));
+
+                break;
+            default:
+
+                number = Integer.parseInt(event.text());
+
+                stack = stateMap.get(event.senderId());
+
+                stack.push(number);
+
+                if (!stack.empty() && stack.size() > 1) {
+                    sendQuickRepliesToUser(event.senderId(), createButtons(number), true);
+                }
+                break;
+        }
     }
 
     private void newAttachmentMessageEventHandler() {
@@ -161,25 +242,6 @@ public class MessengerBot {
     private void newReferralEventHandler(ReferralEvent referralEvent) throws MessengerApiException, MessengerIOException, MalformedURLException {
         log.info("Received new Referral event");
 
-        String userId = referralEvent.senderId();
-        String groupId = referralEvent.referral().refPayload().isPresent() ? referralEvent.referral().refPayload().get() : "";
-
-        RestTemplate restTemplate = new RestTemplate();
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<?> entity = new HttpEntity<>(headers);
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(
-                String.format("http://10.100.25.182:8080/group/join?userId=%s&groupId=%s",
-                        userId,
-                        groupId));
-
-
-        ResponseEntity<Object> response = restTemplate.exchange(builder.build().encode().toUri(), HttpMethod.POST, entity, Object.class);
-        if (response.getStatusCode().value() == 200) {
-            sendMenuButtonToUser(userId, groupId);
-        }
 
     }
 
@@ -231,69 +293,9 @@ public class MessengerBot {
     }
 
     private void sendTextMessage(String recipientId, String text) throws MessengerApiException, MessengerIOException {
-        String responseText;
-        switch (text) {
-            case "barlus":
-                responseText = "Barlusik";
-                break;
-            case "hajox":
-                responseText = "Davay";
-                break;
-            case "inch ka?":
-                responseText = "Ban che";
-                break;
-            default:
-                responseText = "inch es uzum ara";
-                break;
-        }
 
-        final MessagePayload payload = MessagePayload.create(recipientId, MessagingType.RESPONSE, TextMessage.create(responseText));
+        final MessagePayload payload = MessagePayload.create(recipientId, MessagingType.RESPONSE, TextMessage.create(text));
         messenger.send(payload);
-/*        try {
-            SenderAction markSeenAction = SenderAction.MARK_SEEN;
-            SenderActionPayload payloadForMarkingSeen = SenderActionPayload.create(recipientId, markSeenAction);
-
-
-            SenderAction typingOnAction = SenderAction.TYPING_ON;
-            SenderActionPayload payloadForTypingOn = SenderActionPayload.create(recipientId, typingOnAction);
-
-            SenderAction typingOffAction = SenderAction.TYPING_OFF;
-            SenderActionPayload payloadForTypingOFF = SenderActionPayload.create(recipientId, typingOffAction);
-
-            final LocationQuickReply quickReplyB = LocationQuickReply.create();
-            final List<QuickReply> quickReplies = Collections.singletonList(quickReplyB);
-            final TextMessage message = TextMessage.create("Send your location", of(quickReplies), empty());
-
-            MessagePayload payload = MessagePayload.create(recipientId, message);
-            messenger.send(payload);
-
-            final LogInButton buttonA = LogInButton.create(new URL("https://www.list.am/login"));
-
-            final List<Button> buttons = Collections.singletonList(buttonA);
-            final ButtonTemplate buttonTemplate = ButtonTemplate.create("What do you want to do next?", buttons);
-
-            final TemplateMessage templateMessage = TemplateMessage.create(buttonTemplate);
-            final MessagePayload payload = MessagePayload.create(recipientId, templateMessage);
-
-            messenger.send(payload);*/
-
-            /*String newTextMessage;
-            for (int i = 0, length = text.length(); i < length / 320 + 1; i++) {
-                messenger.send(payloadForTypingOn);
-                if (length - i * 320 < 320) {
-                    newTextMessage = text.substring(i * 320);
-                } else {
-                    newTextMessage = text.substring(i * 320, i * 320 + 320);
-                }
-                payload = MessagePayload.create(recipientId, TextMessage.create(newTextMessage));
-                messenger.send(payload);
-            }
-            messenger.send(payloadForTypingOFF);
-
-        } catch (MessengerApiException | MessengerIOException e) {
-            e.printStackTrace();
-        }
-        */
     }
 
 }
