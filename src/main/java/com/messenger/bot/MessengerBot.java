@@ -1,19 +1,11 @@
 package com.messenger.bot;
 
 import com.github.messenger4j.Messenger;
-import com.github.messenger4j.common.SupportedLocale;
 import com.github.messenger4j.common.WebviewHeightRatio;
 import com.github.messenger4j.exception.MessengerApiException;
 import com.github.messenger4j.exception.MessengerIOException;
 import com.github.messenger4j.exception.MessengerVerificationException;
-import com.github.messenger4j.messengerprofile.MessengerSettings;
-import com.github.messenger4j.messengerprofile.getstarted.StartButton;
-import com.github.messenger4j.messengerprofile.greeting.Greeting;
-import com.github.messenger4j.messengerprofile.greeting.LocalizedGreeting;
-import com.github.messenger4j.messengerprofile.persistentmenu.LocalizedPersistentMenu;
-import com.github.messenger4j.messengerprofile.persistentmenu.PersistentMenu;
-import com.github.messenger4j.messengerprofile.persistentmenu.action.PostbackCallToAction;
-import com.github.messenger4j.messengerprofile.persistentmenu.action.UrlCallToAction;
+import com.github.messenger4j.messengerprofile.MessengerSettingProperty;
 import com.github.messenger4j.send.MessagePayload;
 import com.github.messenger4j.send.MessagingType;
 import com.github.messenger4j.send.message.TemplateMessage;
@@ -35,8 +27,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Collections;
+import java.util.List;
 
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
@@ -50,29 +42,13 @@ public class MessengerBot {
     @Value("${messenger4j.pageAccessToken}")
     private String pageAccessToken;
 
-    private Map<Long, Stack<Integer>> stateMap = new ConcurrentHashMap<>();
-
 
     public MessengerBot(@Value("${messenger4j.appSecret}") final String appSecret,
-                        @Value("${messenger4j.verifyToken}") final String verifyToken, @Value("${messenger4j.pageAccessToken}") final String pageAccessToken) throws MessengerApiException, MessengerIOException, MalformedURLException {
+                        @Value("${messenger4j.verifyToken}") final String verifyToken,
+                        @Value("${messenger4j.pageAccessToken}") final String pageAccessToken) throws MessengerApiException, MessengerIOException, MalformedURLException {
         this.messenger = Messenger.create(pageAccessToken, appSecret, verifyToken);
-        final PostbackCallToAction callToActionAB = PostbackCallToAction.create("\uD83D\uDD0E Open Menu", "SEARCH_PET_PAYLOAD");
-        final PostbackCallToAction callToActionAC = PostbackCallToAction.create("\uD83D\uDD14 Turn On/Off notification", "TURN_ON_OFF_PAYLOAD");
 
-        final Greeting greeting = Greeting.create("Hello!", LocalizedGreeting.create(SupportedLocale.en_US,
-                "This is a bot for dating pets "));
-
-        String webViewUrl = "https://petreact.localtunnel.me";
-        final UrlCallToAction callToActionA = UrlCallToAction.create("\uD83D\uDC7B Menu",
-                new URL(webViewUrl), of(WebviewHeightRatio.FULL), of(true), empty(), empty());
-
-        final PersistentMenu persistentMenu = PersistentMenu.create(false, of(Arrays.asList(callToActionA, callToActionAB, callToActionAC)),
-                LocalizedPersistentMenu.create(SupportedLocale.cs_CZ, false, empty()));
-
-        MessengerSettings messengerSettings = MessengerSettings.create(of(StartButton.create("Բարլուսիկ")), of(greeting), empty(), of(Collections.singletonList(new URL(webViewUrl))), empty(), empty(), empty());
-        messenger.updateSettings(messengerSettings);
-        messengerSettings = MessengerSettings.create(of(StartButton.create("Բարլուսիկ")), of(greeting), of(persistentMenu), of(Collections.singletonList(new URL(webViewUrl))), empty(), empty(), empty());
-        messenger.updateSettings(messengerSettings);
+        messenger.deleteSettings(MessengerSettingProperty.PERSISTENT_MENU);
     }
 
     /**
@@ -84,9 +60,9 @@ public class MessengerBot {
     public ResponseEntity<String> verifyWebHook(@RequestParam("hub.mode") final String mode,
                                                 @RequestParam("hub.verify_token") final String verifyToken,
                                                 @RequestParam("hub.challenge") final String challenge) {
-
         try {
             this.messenger.verifyWebhook(mode, verifyToken);
+            log.info("Webhook verified!");
         } catch (MessengerVerificationException ignored) {
         }
         return ResponseEntity.status(HttpStatus.OK).body(challenge);
@@ -103,6 +79,7 @@ public class MessengerBot {
             messenger.onReceiveEvents(payload, of(signature), event -> {
                         if (event.isTextMessageEvent()) {
                             TextMessageEvent textEvent = event.asTextMessageEvent();
+                            System.out.println("UserId - " + textEvent.senderId());
                             try {
                                 newTextMessageEventHandler(textEvent);
                             } catch (MalformedURLException | MessengerIOException | MessengerApiException e) {
@@ -145,8 +122,23 @@ public class MessengerBot {
 
     private void newTextMessageEventHandler(TextMessageEvent event) throws MalformedURLException, MessengerApiException, MessengerIOException {
         log.info("Received new Text message");
-        //sendTextMessage(senderId, "svbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafh");
+
+        System.out.println(event.recipientId());
         sendTextMessage(event.senderId(), event.text());
+
+/*        final IdRecipient recipient = IdRecipient.create(event.senderId());
+        final NotificationType notificationType = NotificationType.NO_PUSH;
+        String imageUrl = "https://file.transfer.cc-bot.info/file/download?fileName=VfE_html5.mp4";
+        final UrlRichMediaAsset richMediaAsset = UrlRichMediaAsset.create(IMAGE, new URL(imageUrl), of(true));
+        final RichMediaMessage richMediaMessage = RichMediaMessage.create(richMediaAsset);
+        final MessagePayload payload = MessagePayload.create(recipient, MessagingType.RESPONSE,
+                richMediaMessage);
+
+        messenger.send(payload);*/
+
+
+        //sendTextMessage(senderId, "svbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafhsvbkhlsdvkbhlskdalhfvlaksdjfhlksdjfhaskldhflaksdjfhsakdljfhsalkfhasdkljhsdakljfdhlaskdfhksljdafh");
+//        sendTextMessage(event.senderId(), event.text());
     }
 
 
@@ -231,23 +223,8 @@ public class MessengerBot {
     }
 
     private void sendTextMessage(String recipientId, String text) throws MessengerApiException, MessengerIOException {
-        String responseText;
-        switch (text) {
-            case "barlus":
-                responseText = "Barlusik";
-                break;
-            case "hajox":
-                responseText = "Davay";
-                break;
-            case "inch ka?":
-                responseText = "Ban che";
-                break;
-            default:
-                responseText = "inch es uzum ara";
-                break;
-        }
 
-        final MessagePayload payload = MessagePayload.create(recipientId, MessagingType.RESPONSE, TextMessage.create(responseText));
+        final MessagePayload payload = MessagePayload.create(recipientId, MessagingType.RESPONSE, TextMessage.create(text));
         messenger.send(payload);
 /*        try {
             SenderAction markSeenAction = SenderAction.MARK_SEEN;
